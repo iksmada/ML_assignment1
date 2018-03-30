@@ -53,7 +53,7 @@ for size in range(1, trainDataX.shape[1]):
     aux = mse.copy()
     features = []
     for i in range(size):
-        localMax = max(aux.items(), key=operator.itemgetter(1))[0]
+        localMax = min(aux.items(), key=operator.itemgetter(1))[0]
         features.append(localMax)
         del aux[localMax]
 
