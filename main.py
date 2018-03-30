@@ -5,7 +5,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 
 
 def one_feature_at_a_time(regr):
-    #Make regression with one feature at a time
+    # Make regression with one feature at a time
     mse = {}
     i = 0
     for feature in np.transpose(trainDataX):
@@ -33,7 +33,7 @@ def one_feature_at_a_time(regr):
 
 
 def feature_combination(regr, mse):
-    #combine feature from 1 to N using MSE order of minimum error
+    # combine feature from 1 to N using MSE order of minimum error
     for size in range(1, trainDataX.shape[1]):
 
         aux = mse.copy()
