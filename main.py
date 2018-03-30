@@ -2,6 +2,7 @@ import operator
 import numpy as np
 from sklearn import datasets, linear_model
 from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.preprocessing import StandardScaler
 
 # Load the shares dataset
 rawData = open("dataset/shares/train.csv")
@@ -18,3 +19,8 @@ testDataX = testData[:, 2:]  # take off unpredictable features
 # Load the shares testset expected result
 rawData = open("dataset/shares/test_target.csv")
 testDataY = np.loadtxt(rawData, skiprows=1)[:, None]
+
+scaler = StandardScaler()
+trainDataXScaled = scaler.fit_transform(trainDataX)
+testDataXScaled = scaler.transform(testDataX)
+
