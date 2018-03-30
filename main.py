@@ -3,11 +3,12 @@ import numpy as np
 from sklearn import datasets, linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 
-def oneFeatureAtATime(regr):
+
+def one_feature_at_a_time(regr):
+    #Make regression with one feature at a time
     mse = {}
     i = 0
     for feature in np.transpose(trainDataX):
-
         # Train the model using the training sets
         regr.fit(feature[:, None], trainDataY)
 
@@ -31,13 +32,14 @@ def oneFeatureAtATime(regr):
     return mse
 
 
-def featureCombination(regr, mse):
+def feature_combination(regr, mse):
+    #combine feature from 1 to N using MSE order of minimum error
     for size in range(1, trainDataX.shape[1]):
 
         aux = mse.copy()
         features = []
         for i in range(size):
-            localMax = max(aux.items(), key=operator.itemgetter(1))[0]
+            localMax = min(aux.items(), key=operator.itemgetter(1))[0]
             features.append(localMax)
             del aux[localMax]
 
@@ -59,6 +61,7 @@ def featureCombination(regr, mse):
         print('Variance score: %.2f' % r2_score(testDataY, predDataY))
         print("========================================================")
 
+
 # Load the shares dataset
 rawData = open("dataset/shares/train.csv")
 trainData = np.genfromtxt(rawData, skip_header=1, delimiter=',')
@@ -78,6 +81,6 @@ testDataY = np.loadtxt(rawData, skiprows=1)[:, None]
 # Create linear regression object
 regr = linear_model.RidgeCV(alphas=[0.1, 1.0, 10.0], normalize=True)
 
-mse = oneFeatureAtATime(regr)
+mse = one_feature_at_a_time(regr)
 
-featureCombination(regr, mse)
+feature_combination(regr, mse)
