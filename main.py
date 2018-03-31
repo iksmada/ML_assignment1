@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.preprocessing import StandardScaler
@@ -21,14 +23,14 @@ def cost_function(X, y, beta):
     return J
 
 
-def gradient_descent(X, y, iterations=10, beta=-1, alpha=0.1, gamma = 0.1):
+def gradient_descent(X, y, iterations=1000, alpha=0.1, gamma = 0.1, beta=None):
     """
     gradient_descent() performs gradient descent to learn beta by
     taking num_iters gradient steps with learning rate alpha
     """
     cost_history = [0] * iterations
     m = len(y)
-    if beta == -1:
+    if beta is None:
         beta = np.zeros((X.shape[1], 1))
 
     for iteration in range(iterations):
@@ -45,6 +47,27 @@ def gradient_descent(X, y, iterations=10, beta=-1, alpha=0.1, gamma = 0.1):
         # cost_history[iteration] = cost
 
     return beta, cost_history
+
+
+def cross_validation(X, y, iterations=10, alphas=(0.001, 0.01, 0.1, 1, 10), gammas=None, beta=None):
+
+    if gammas is None:
+        gammas = np.power(1/10, range(1, 10))
+    if iterations is None:
+        iterations = 100
+
+    best_cost = -1
+    best_gamma = 0
+    best_alpha = 0
+    for alpha in alphas:
+        for gamma in gammas:
+            beta, cost_history = gradient_descent(X, y, iterations, alpha, gamma)
+            cost = min(cost_history)
+            if (best_cost == -1 or cost<best_cost):
+                best_alpha = alpha
+                best_gamma = gamma
+                best_cost = cost
+    return best_alpha, best_gamma
 
 
 # Load the shares dataset
@@ -71,7 +94,12 @@ trainDataXScaled = np.insert(trainDataXScaled, [0], np.ones((trainDataXScaled.sh
 testDataXScaled = scaler.transform(testDataX)
 testDataXScaled = np.insert(testDataXScaled, [0], np.ones((testDataXScaled.shape[0], 1)), axis=1)
 
-beta, cost_history = gradient_descent(trainDataXScaled, trainDataY, 1000)
+
+alpha, gamma = cross_validation(trainDataXScaled, trainDataY)
+
+print("Best Alpha %f, Best Gamma %.2E" % (alpha, Decimal(gamma)))
+
+beta, cost_history = gradient_descent(trainDataXScaled, trainDataY, 1000, alpha, gamma)
 
 predDataY = predict(testDataXScaled, beta)
 
