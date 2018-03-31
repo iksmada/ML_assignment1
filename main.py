@@ -16,12 +16,12 @@ def cost_function(X, y, beta):
     m = len(y)
 
     ## Calculate the cost with the given parameters
-    J = np.sum((predict(X, beta) - y) ** 2) / 2 / m
+    J = (np.sum((predict(X, beta) - y) ** 2) + beta[:, 0].dot(beta)) / 2 / m
 
     return J
 
 
-def gradient_descent(X, y, iterations=10, beta=-1, alpha=0.1):
+def gradient_descent(X, y, iterations=10, beta=-1, alpha=0.1, gamma = 0.1):
     """
     gradient_descent() performs gradient descent to learn beta by
     taking num_iters gradient steps with learning rate alpha
@@ -34,7 +34,7 @@ def gradient_descent(X, y, iterations=10, beta=-1, alpha=0.1):
     for iteration in range(iterations):
         hypothesis = predict(X, beta)
         loss = hypothesis - y
-        gradient = X.T.dot(loss) / m
+        gradient = (X.T.dot(loss) + gamma * beta)/ m
         beta = beta - alpha * gradient
         cost = cost_function(X, y, beta)
         cost_history[iteration] = cost
@@ -63,9 +63,13 @@ testDataX = testData[:, 2:]  # take off unpredictable features
 rawData = open("dataset/shares/test_target.csv")
 testDataY = np.loadtxt(rawData, skiprows=1)
 
+# do Standart Scaling
 scaler = StandardScaler()
 trainDataXScaled = scaler.fit_transform(trainDataX)
+# add bias feature at the beginning
+trainDataXScaled = np.insert(trainDataXScaled, [0], np.ones((trainDataXScaled.shape[0], 1)), axis=1)
 testDataXScaled = scaler.transform(testDataX)
+testDataXScaled = np.insert(testDataXScaled, [0], np.ones((testDataXScaled.shape[0], 1)), axis=1)
 
 beta, cost_history = gradient_descent(trainDataXScaled, trainDataY, 1000)
 
