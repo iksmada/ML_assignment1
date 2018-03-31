@@ -1,3 +1,4 @@
+import operator
 from decimal import Decimal
 
 import numpy as np
@@ -49,12 +50,10 @@ def gradient_descent(X, y, iterations=1000, alpha=0.1, gamma = 0.1, beta=None):
     return beta, cost_history
 
 
-def cross_validation(X, y, iterations=10, alphas=(0.001, 0.01, 0.1, 1, 10), gammas=None, beta=None):
+def cross_validation(X, y, iterations=100, alphas=(0.001, 0.01, 0.1, 1, 10), gammas=None, beta=None):
 
     if gammas is None:
-        gammas = np.power(1/10, range(1, 10))
-    if iterations is None:
-        iterations = 100
+        gammas = np.power(1/10, range(1, 15))
 
     best_cost = -1
     best_gamma = 0
@@ -89,11 +88,75 @@ testDataY = np.loadtxt(rawData, skiprows=1)
 # do Standart Scaling
 scaler = StandardScaler()
 trainDataXScaled = scaler.fit_transform(trainDataX)
-# add bias feature at the beginning
-trainDataXScaled = np.insert(trainDataXScaled, [0], np.ones((trainDataXScaled.shape[0], 1)), axis=1)
 testDataXScaled = scaler.transform(testDataX)
-testDataXScaled = np.insert(testDataXScaled, [0], np.ones((testDataXScaled.shape[0], 1)), axis=1)
 
+i=0
+mse_pre = {}
+for feature in np.transpose(trainDataXScaled):
+    print("feature " + str(i))
+
+    # add bias feature at the beginning
+    feature = np.insert(feature[:, None], [0], np.ones((feature.shape[0], 1)), axis=1)
+    testDataXOneFeat = np.insert(testDataXScaled[:, i][:,None], [0], np.ones((testDataXScaled.shape[0], 1)), axis=1)
+
+    alpha, gamma = cross_validation(feature, trainDataY)
+    print("Best Alpha %f, Best Gamma %.2E" % (alpha, Decimal(gamma)))
+
+    # Train the model using the training sets
+    beta, cost_history = gradient_descent(feature, trainDataY, 200, alpha, gamma)
+
+    # Make predictions using the testing set
+    predDataY = predict(testDataXOneFeat, beta)
+
+    # The coefficients
+    mse_pre[i] = (mean_squared_error(testDataY, predDataY))
+    # The mean squared error
+    print("Mean squared error: %.2f"
+          % mse_pre[i])
+    # Explained variance score: 1 is perfect prediction
+    print('Variance score: %.2f' % r2_score(testDataY, predDataY))
+    print("========================================================")
+    i = i + 1
+
+print("\nBest feature is %d" % max(mse_pre.items(), key=operator.itemgetter(1))[0])
+print("========================================================")
+
+i=0
+mse_pos = {}
+for size in range(1, trainDataXScaled.shape[1]):
+    print("Using %d features" % size)
+
+    aux = mse_pre.copy()
+    features = []
+    for j in range(size):
+        localMax = max(aux.items(), key=operator.itemgetter(1))[0]
+        features.append(localMax)
+        del aux[localMax]
+
+    # add bias feature at the beginning
+    trainDataXSelectedFeat = np.insert(trainDataXScaled[:, features], [0], np.ones((trainDataXScaled.shape[0], 1)), axis=1)
+    testDataXSelectedFeat = np.insert(testDataXScaled[:, features], [0], np.ones((trainDataXScaled.shape[0], 1)), axis=1)
+
+    alpha, gamma = cross_validation(trainDataXSelectedFeat, trainDataY)
+    print("Best Alpha %f, Best Gamma %.2E" % (alpha, Decimal(gamma)))
+
+    # Train the model using the training sets
+    beta, cost_history = gradient_descent(trainDataXSelectedFeat, trainDataY, 200, alpha, gamma)
+
+    # Make predictions using the testing set
+    predDataY = predict(testDataXSelectedFeat, beta)
+
+    # The coefficients
+    mse_pos[i] = (mean_squared_error(testDataY, predDataY))
+    # The mean squared error
+    print("Mean squared error: %.2f"
+          % mse_pos[i])
+    # Explained variance score: 1 is perfect prediction
+    print('Variance score: %.2f' % r2_score(testDataY, predDataY))
+    print("========================================================")
+
+print("\nBest selection is with %d features" % max(mse_pos.items(), key=operator.itemgetter(1))[0])
+print("========================================================")
 
 alpha, gamma = cross_validation(trainDataXScaled, trainDataY)
 
