@@ -140,6 +140,20 @@ def show_stats(alpha, cost_min, gamma, pred_data_y, test_data_y):
     print("========================================================")
 
 
+def remove_noise(train_data_x, train_data_y):
+    y, x, _ = plt.hist(train_data_y.ravel(), range(0, 10000, 100))
+    share_center = x[np.where(y == y.max())[0]]
+    share_std = np.std(train_data_y)
+    sample_del = []
+    for i in range(size_before):
+        if train_data_y[i][0] > 0.2 * share_std + share_center or train_data_y[i][0] < share_center - 0.05 * share_std:
+            sample_del.append(i)
+    train_data_y = np.delete(train_data_y, sample_del, axis=0)
+    train_data_x = np.delete(train_data_x, sample_del, axis=0)
+
+    return train_data_x, train_data_y
+
+
 # Load the shares dataset
 rawData = open("dataset/shares/train.csv")
 trainData = np.genfromtxt(rawData, skip_header=1, delimiter=',')
@@ -161,18 +175,9 @@ scaler = StandardScaler()
 trainDataX = scaler.fit_transform(trainDataX)
 testDataX = scaler.transform(testDataX)
 
-y, x, _ = plt.hist(trainDataY.ravel(), range(0, 10000, 100))
-share_center = x[np.where(y==y.max())[0]]
-share_std = np.std(trainDataY)
-sample_del = []
 size_before = trainDataY.shape[0]
-for i in range(size_before):
-    if trainDataY[i][0] > 0.2*share_std + share_center or trainDataY[i][0] < share_center - 0.05*share_std:
-        sample_del.append(i)
 
-
-trainDataY = np.delete(trainDataY, sample_del, axis=0)
-trainDataX = np.delete(trainDataX, sample_del, axis=0)
+trainDataX, trainDataY = remove_noise(trainDataX, trainDataY)
 
 print("Deleted %d samples" % (size_before - trainDataY.shape[0]))
 plt.hist(trainDataY.ravel(), range(0, 10000, 100))
