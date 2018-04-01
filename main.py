@@ -76,10 +76,11 @@ def feature_test(i, train_data_x, train_data_y, test_data_x, test_data_y):
     feature = np.insert(train_data_x[:, i][:, None], [0], np.ones((train_data_x.shape[0], 1)), axis=1)
     test_data_x_one_feat = np.insert(test_data_x[:, i][:, None], [0], np.ones((test_data_x.shape[0], 1)), axis=1)
 
-    alpha, gamma = cross_validation(feature, train_data_y)
-
+    # alpha, gamma = cross_validation(feature, train_data_y)
+    alpha = 1
+    gamma = 1
     # Train the model using the training sets
-    beta, cost_history = gradient_descent(feature, train_data_y, 100, alpha, gamma)
+    beta, cost_history = gradient_descent(feature, train_data_y, 50, alpha, gamma)
     cost_min = float(min(cost_history))
     # Make predictions using the testing set
     pred_data_y = predict(test_data_x_one_feat, beta)
@@ -145,13 +146,22 @@ def remove_noise(train_data_x, train_data_y):
     share_center = x[np.where(y == y.max())[0]]
     share_std = np.std(train_data_y)
     sample_del = []
-    for i in range(size_before):
+    size = trainDataY.shape[0]
+    for i in range(size):
         if train_data_y[i][0] > 0.2 * share_std + share_center or train_data_y[i][0] < share_center - 0.05 * share_std:
             sample_del.append(i)
     train_data_y = np.delete(train_data_y, sample_del, axis=0)
     train_data_x = np.delete(train_data_x, sample_del, axis=0)
 
     return train_data_x, train_data_y
+
+
+def add_complexity(train_data_x):
+    n = train_data_x.shape[1]
+    for i in range(n):
+        for j in range(n):
+            train_data_x = np.append(train_data_x, np.multiply(train_data_x[:, i], train_data_x[:, j])[:, None], axis=1)
+    return train_data_x
 
 
 # Load the shares dataset
@@ -183,17 +193,33 @@ print("Deleted %d samples" % (size_before - trainDataY.shape[0]))
 plt.hist(trainDataY.ravel(), range(0, 10000, 100))
 plt.show(block=True)
 
+size_before = trainDataX.shape[1]
+try:
+    trainDataX = np.load('dataset/shares/train_squared.npy')
+except FileNotFoundError:
+    trainDataX = add_complexity(trainDataX)
+    np.save('dataset/shares/train_squared.npy', trainDataX)
+
+print("Added %d features" % (trainDataX.shape[1] - size_before))
+
+try:
+    testDataX = np.load('dataset/shares/test_squared.npy')
+except FileNotFoundError:
+    testDataX = add_complexity(testDataX)
+    np.save('dataset/shares/test_squared.npy', testDataX)
+
+
 num_cores = multiprocessing.cpu_count()
 
 try:
-    with open("cost2.txt", 'r') as f:
+    with open("cost3.txt", 'r') as f:
         cost_pre = [float(line) for line in f]
 except FileNotFoundError:
     cost_pre = Parallel(n_jobs=num_cores)(
         delayed(feature_test)(i, trainDataX, trainDataY, testDataX, testDataY) for i in
         range(trainDataX.shape[1]))
 
-    with open("cost2.txt", 'w') as f:
+    with open("cost3.txt", 'w') as f:
         for s in cost_pre:
             f.write(str(s) + '\n')
 best_feature = cost_pre.index(min(cost_pre))
@@ -203,14 +229,14 @@ print("========================================================")
 cost_pos = [0, cost_pre[best_feature]]
 cost_pos = cost_pos + Parallel(n_jobs=num_cores)(
     delayed(feature_combination)(size, cost_pre, trainDataX, trainDataY, testDataX, testDataY, 25) for size
-    in range(2, trainDataX.shape[1]))
+    in range(2, 100))
 
 best_n_features = cost_pos.index(min(cost_pos[1:]))
 print("\nBest selection is with %d features" % best_n_features)
 print("========================================================")
 
 cost_pos, cost_history = feature_combination(best_n_features, cost_pre, trainDataX, trainDataY, testDataX,
-                                             testDataY, 50, True)
+                                             testDataY, 100, True)
 
 plt.plot(range(len(cost_history)), cost_history, 'ro')
 plt.show()
