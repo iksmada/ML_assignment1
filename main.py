@@ -99,6 +99,42 @@ def feature_test(i, train_data_x, train_data_y, test_data_x, test_data_y):
     return mse_pre
 
 
+def feature_combination(size, mse_pre, trainDataXScaled, trainDataY, testDataXScaled, testDataY):
+    print("Using %d features" % size)
+
+    aux = mse_pre.copy()
+    features = []
+    for j in range(size):
+        localMax = aux.index(max(aux))
+        features.append(localMax)
+        del aux[localMax]
+
+    # add bias feature at the beginning
+    trainDataXSelectedFeat = np.insert(trainDataXScaled[:, features], [0], np.ones((trainDataXScaled.shape[0], 1)),
+                                       axis=1)
+    testDataXSelectedFeat = np.insert(testDataXScaled[:, features], [0], np.ones((testDataXScaled.shape[0], 1)),
+                                      axis=1)
+
+    alpha, gamma = cross_validation(trainDataXSelectedFeat, trainDataY)
+    print("Best Alpha %f, Best Gamma %.2E" % (alpha, Decimal(gamma)))
+
+    # Train the model using the training sets
+    beta, cost_history = gradient_descent(trainDataXSelectedFeat, trainDataY, 200, alpha, gamma)
+
+    # Make predictions using the testing set
+    predDataY = predict(testDataXSelectedFeat, beta)
+
+    # The coefficients
+    mse_pos = (mean_squared_error(testDataY, predDataY))
+    # The mean squared error
+    print("Mean squared error: %.2f"
+          % mse_pos)
+    # Explained variance score: 1 is perfect prediction
+    print('Variance score: %.2f' % r2_score(testDataY, predDataY))
+    print("========================================================")
+
+    return mse_pos
+
 # Load the shares dataset
 rawData = open("dataset/shares/train.csv")
 trainData = np.genfromtxt(rawData, skip_header=1, delimiter=',')
@@ -120,11 +156,12 @@ scaler = StandardScaler()
 trainDataXScaled = scaler.fit_transform(trainDataX)
 testDataXScaled = scaler.transform(testDataX)
 
+num_cores = multiprocessing.cpu_count()
+
 try:
     with open("mse.txt", 'r') as f:
         mse_pre = [line.rstrip('\n') for line in f]
 except FileNotFoundError:
-    num_cores = multiprocessing.cpu_count()
     mse_pre = Parallel(n_jobs=num_cores)(
         delayed(feature_test)(i, trainDataXScaled, trainDataY, testDataXScaled, testDataY) for i in
         range(trainDataXScaled.shape[1]))
@@ -136,42 +173,12 @@ except FileNotFoundError:
 print("\nBest feature is %d" % mse_pre.index(max(mse_pre)))
 print("========================================================")
 
-mse_pos = {1: max(mse_pre)}
+mse_pos = [0, max(mse_pre)]
 for size in range(2, trainDataXScaled.shape[1]):
-    print("Using %d features" % size)
+    mse_pos.append(feature_combination(size, mse_pre, trainDataXScaled, trainDataY, testDataXScaled, testDataY))
+#mse_pos = Parallel(n_jobs=num_cores)(delayed(feature_combination)(size, mse_pre, trainDataXScaled, trainDataY, testDataXScaled, testDataY) for size in range(2, trainDataXScaled.shape[1]))
 
-    aux = mse_pre.copy()
-    features = []
-    for j in range(size):
-        localMax = aux.index(max(mse_pre))
-        features.append(localMax)
-        del aux[localMax]
-
-    # add bias feature at the beginning
-    trainDataXSelectedFeat = np.insert(trainDataXScaled[:, features], [0], np.ones((trainDataXScaled.shape[0], 1)),
-                                       axis=1)
-    testDataXSelectedFeat = np.insert(testDataXScaled[:, features], [0], np.ones((testDataXScaled.shape[0], 1)),
-                                      axis=1)
-
-    alpha, gamma = cross_validation(trainDataXSelectedFeat, trainDataY)
-    print("Best Alpha %f, Best Gamma %.2E" % (alpha, Decimal(gamma)))
-
-    # Train the model using the training sets
-    beta, cost_history = gradient_descent(trainDataXSelectedFeat, trainDataY, 200, alpha, gamma)
-
-    # Make predictions using the testing set
-    predDataY = predict(testDataXSelectedFeat, beta)
-
-    # The coefficients
-    mse_pos[size] = (mean_squared_error(testDataY, predDataY))
-    # The mean squared error
-    print("Mean squared error: %.2f"
-          % mse_pos[size])
-    # Explained variance score: 1 is perfect prediction
-    print('Variance score: %.2f' % r2_score(testDataY, predDataY))
-    print("========================================================")
-
-print("\nBest selection is with %d features" % max(mse_pos.items(), key=operator.itemgetter(1))[0])
+print("\nBest selection is with %d features" % mse_pos.index(max(mse_pos)))
 print("========================================================")
 
 alpha, gamma = cross_validation(trainDataXScaled, trainDataY)
