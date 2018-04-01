@@ -27,7 +27,7 @@ def cost_function(X, y, beta):
     return J
 
 
-def gradient_descent(X, y, iterations=1000, alpha=0.1, gamma=0.1, beta=None):
+def gradient_descent(X, y, iterations=100, alpha=0.1, gamma=0.1, beta=None):
     """
     gradient_descent() performs gradient descent to learn beta by
     taking num_iters gradient steps with learning rate alpha
@@ -53,7 +53,7 @@ def gradient_descent(X, y, iterations=1000, alpha=0.1, gamma=0.1, beta=None):
     return beta, cost_history
 
 
-def cross_validation(X, y, iterations=100, alphas=(0.001, 0.01, 0.1, 1, 10), gammas=None, beta=None):
+def cross_validation(X, y, iterations=50, alphas=(0.001, 0.01, 0.1, 1, 10), gammas=None, beta=None):
     if gammas is None:
         gammas = np.power(1 / 10, range(1, 15))
 
@@ -80,7 +80,7 @@ def feature_test(i, train_data_x, train_data_y, test_data_x, test_data_y):
     alpha, gamma = cross_validation(feature, train_data_y)
 
     # Train the model using the training sets
-    beta, cost_history = gradient_descent(feature, train_data_y, 200, alpha, gamma)
+    beta, cost_history = gradient_descent(feature, train_data_y, 100, alpha, gamma)
 
     # Make predictions using the testing set
     predDataY = predict(testDataXOneFeat, beta)
@@ -99,41 +99,43 @@ def feature_test(i, train_data_x, train_data_y, test_data_x, test_data_y):
     return mse_pre
 
 
-def feature_combination(size, mse_pre, trainDataXScaled, trainDataY, testDataXScaled, testDataY):
-    print("Using %d features" % size)
+def feature_combination(size, mse_pre, train_data_x, train_data_y, test_data_x, test_data_y, iterations=100, return_cost=False):
 
     aux = mse_pre.copy()
     features = []
     for j in range(size):
-        localMax = aux.index(max(aux))
-        features.append(localMax)
-        del aux[localMax]
+        local_min = aux.index(min(aux))
+        features.append(local_min)
+        del aux[local_min]
 
     # add bias feature at the beginning
-    trainDataXSelectedFeat = np.insert(trainDataXScaled[:, features], [0], np.ones((trainDataXScaled.shape[0], 1)),
+    train_data_x_selected_feat = np.insert(train_data_x[:, features], [0], np.ones((train_data_x.shape[0], 1)),
                                        axis=1)
-    testDataXSelectedFeat = np.insert(testDataXScaled[:, features], [0], np.ones((testDataXScaled.shape[0], 1)),
+    test_data_x_selected_feat = np.insert(test_data_x[:, features], [0], np.ones((test_data_x.shape[0], 1)),
                                       axis=1)
 
-    alpha, gamma = cross_validation(trainDataXSelectedFeat, trainDataY)
-    print("Best Alpha %f, Best Gamma %.2E" % (alpha, Decimal(gamma)))
+    alpha, gamma = cross_validation(train_data_x_selected_feat, train_data_y)
 
     # Train the model using the training sets
-    beta, cost_history = gradient_descent(trainDataXSelectedFeat, trainDataY, 200, alpha, gamma)
+    beta, cost_history = gradient_descent(train_data_x_selected_feat, train_data_y, iterations, alpha, gamma)
 
     # Make predictions using the testing set
-    predDataY = predict(testDataXSelectedFeat, beta)
+    pred_data_y = predict(test_data_x_selected_feat, beta)
 
     # The coefficients
-    mse_pos = (mean_squared_error(testDataY, predDataY))
+    mse_pos = (mean_squared_error(test_data_y, pred_data_y))
+    print("Using %d features" % size)
+    print("Best Alpha %f, Best Gamma %.2E" % (alpha, Decimal(gamma)))
     # The mean squared error
     print("Mean squared error: %.2f"
           % mse_pos)
     # Explained variance score: 1 is perfect prediction
-    print('Variance score: %.2f' % r2_score(testDataY, predDataY))
+    print('Variance score: %.2f' % r2_score(test_data_y, pred_data_y))
     print("========================================================")
-
-    return mse_pos
+    if return_cost:
+        return mse_pos, cost_history
+    else:
+        return mse_pos
 
 # Load the shares dataset
 rawData = open("dataset/shares/train.csv")
@@ -160,7 +162,7 @@ num_cores = multiprocessing.cpu_count()
 
 try:
     with open("mse.txt", 'r') as f:
-        mse_pre = [line.rstrip('\n') for line in f]
+        mse_pre = [float(line) for line in f]
 except FileNotFoundError:
     mse_pre = Parallel(n_jobs=num_cores)(
         delayed(feature_test)(i, trainDataXScaled, trainDataY, testDataXScaled, testDataY) for i in
@@ -169,30 +171,18 @@ except FileNotFoundError:
     with open("mse.txt", 'w') as f:
         for s in mse_pre:
             f.write(str(s) + '\n')
-
-print("\nBest feature is %d" % mse_pre.index(max(mse_pre)))
+best_feature = mse_pre.index(min(mse_pre))
+print("\nBest feature is %d" % best_feature)
 print("========================================================")
 
-mse_pos = [0, max(mse_pre)]
-for size in range(2, trainDataXScaled.shape[1]):
-    mse_pos.append(feature_combination(size, mse_pre, trainDataXScaled, trainDataY, testDataXScaled, testDataY))
-#mse_pos = Parallel(n_jobs=num_cores)(delayed(feature_combination)(size, mse_pre, trainDataXScaled, trainDataY, testDataXScaled, testDataY) for size in range(2, trainDataXScaled.shape[1]))
+mse_pos = [0, mse_pre[best_feature]]
+mse_pos = mse_pos + Parallel(n_jobs=num_cores)(delayed(feature_combination)(size, mse_pre, trainDataXScaled, trainDataY, testDataXScaled, testDataY, 50) for size in range(2, trainDataXScaled.shape[1]))
 
-print("\nBest selection is with %d features" % mse_pos.index(max(mse_pos)))
+best_n_features = mse_pos.index(min(mse_pos[1:]))
+print("\nBest selection is with %d features" % best_n_features)
 print("========================================================")
 
-alpha, gamma = cross_validation(trainDataXScaled, trainDataY)
-
-print("Best Alpha %f, Best Gamma %.2E" % (alpha, Decimal(gamma)))
-
-beta, cost_history = gradient_descent(trainDataXScaled, trainDataY, 1000, alpha, gamma)
-
-predDataY = predict(testDataXScaled, beta)
-
-print("Mean squared error: %.2f" % mean_squared_error(testDataY, predDataY))
-# Explained variance score: 1 is perfect prediction
-print('Variance score: %.2f' % r2_score(testDataY, predDataY))
-print("========================================================")
+mse_pos, cost_history = feature_combination(best_n_features, mse_pre, trainDataXScaled, trainDataY, testDataXScaled, testDataY, 100, True)
 
 plt.plot(range(len(cost_history)), cost_history, 'ro')
 plt.show()
