@@ -9,7 +9,6 @@ from joblib import Parallel, delayed
 import multiprocessing
 
 
-
 def predict(X, beta):
     return X.dot(beta)
 
@@ -72,32 +71,33 @@ def cross_validation(X, y, iterations=100, alphas=(0.001, 0.01, 0.1, 1, 10), gam
     return best_alpha, best_gamma
 
 
-def feature_test(i, trainDataXScaled, trainDataY, testDataXScaled, testDataY):
-    print("Feature " + str(i))
+def feature_test(i, train_data_x, train_data_y, test_data_x, test_data_y):
     # add bias feature at the beginning
-    feature = np.insert(trainDataXScaled[:, i][:, None], [0], np.ones((trainDataXScaled.shape[0], 1)), axis=1)
-    testDataXOneFeat = np.insert(testDataXScaled[:, i][:, None], [0], np.ones((testDataXScaled.shape[0], 1)),
+    feature = np.insert(train_data_x[:, i][:, None], [0], np.ones((train_data_x.shape[0], 1)), axis=1)
+    testDataXOneFeat = np.insert(test_data_x[:, i][:, None], [0], np.ones((test_data_x.shape[0], 1)),
                                  axis=1)
 
-    alpha, gamma = cross_validation(feature, trainDataY)
-    print("Best Alpha %f, Best Gamma %.2E" % (alpha, Decimal(gamma)))
+    alpha, gamma = cross_validation(feature, train_data_y)
 
     # Train the model using the training sets
-    beta, cost_history = gradient_descent(feature, trainDataY, 200, alpha, gamma)
+    beta, cost_history = gradient_descent(feature, train_data_y, 200, alpha, gamma)
 
     # Make predictions using the testing set
     predDataY = predict(testDataXOneFeat, beta)
 
     # The coefficients
-    mse_pre = (mean_squared_error(testDataY, predDataY))
+    mse_pre = (mean_squared_error(test_data_y, predDataY))
     # The mean squared error
+    print("Feature " + str(i))
+    print("Best Alpha %f, Best Gamma %.2E" % (alpha, Decimal(gamma)))
     print("Mean squared error: %.2f"
           % mse_pre)
     # Explained variance score: 1 is perfect prediction
-    print('Variance score: %.2f' % r2_score(testDataY, predDataY))
+    print('Variance score: %.2f' % r2_score(test_data_y, predDataY))
     print("========================================================")
 
     return mse_pre
+
 
 # Load the shares dataset
 rawData = open("dataset/shares/train.csv")
@@ -120,24 +120,30 @@ scaler = StandardScaler()
 trainDataXScaled = scaler.fit_transform(trainDataX)
 testDataXScaled = scaler.transform(testDataX)
 
-mse_pre = {}
-for i in range(trainDataXScaled.shape[1]):
-    mse_pre[i] = feature_test(i, trainDataXScaled, trainDataY, testDataXScaled, testDataY)
+try:
+    with open("mse.txt", 'r') as f:
+        mse_pre = [line.rstrip('\n') for line in f]
+except FileNotFoundError:
+    num_cores = multiprocessing.cpu_count()
+    mse_pre = Parallel(n_jobs=num_cores)(
+        delayed(feature_test)(i, trainDataXScaled, trainDataY, testDataXScaled, testDataY) for i in
+        range(trainDataXScaled.shape[1]))
 
-num_cores = multiprocessing.cpu_count()
-results = Parallel(n_jobs=num_cores)(delayed(feature_test)(i) for i in inputs)
+    with open("mse.txt", 'w') as f:
+        for s in mse_pre:
+            f.write(str(s) + '\n')
 
-print("\nBest feature is %d" % max(mse_pre.items(), key=operator.itemgetter(1))[0])
+print("\nBest feature is %d" % mse_pre.index(max(mse_pre)))
 print("========================================================")
 
-mse_pos = {1, max(mse_pre.items(), key=operator.itemgetter(1))[1]}
+mse_pos = {1: max(mse_pre)}
 for size in range(2, trainDataXScaled.shape[1]):
     print("Using %d features" % size)
 
     aux = mse_pre.copy()
     features = []
     for j in range(size):
-        localMax = max(aux.items(), key=operator.itemgetter(1))[0]
+        localMax = aux.index(max(mse_pre))
         features.append(localMax)
         del aux[localMax]
 
