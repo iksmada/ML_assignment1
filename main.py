@@ -74,8 +74,7 @@ def cross_validation(X, y, iterations=50, alphas=(0.001, 0.01, 0.1, 1, 10), gamm
 def feature_test(i, train_data_x, train_data_y, test_data_x, test_data_y):
     # add bias feature at the beginning
     feature = np.insert(train_data_x[:, i][:, None], [0], np.ones((train_data_x.shape[0], 1)), axis=1)
-    testDataXOneFeat = np.insert(test_data_x[:, i][:, None], [0], np.ones((test_data_x.shape[0], 1)),
-                                 axis=1)
+    test_data_x_one_feat = np.insert(test_data_x[:, i][:, None], [0], np.ones((test_data_x.shape[0], 1)), axis=1)
 
     alpha, gamma = cross_validation(feature, train_data_y)
 
@@ -83,24 +82,24 @@ def feature_test(i, train_data_x, train_data_y, test_data_x, test_data_y):
     beta, cost_history = gradient_descent(feature, train_data_y, 100, alpha, gamma)
 
     # Make predictions using the testing set
-    predDataY = predict(testDataXOneFeat, beta)
+    pred_data_y = predict(test_data_x_one_feat, beta)
 
     # The coefficients
-    mse_pre = (mean_squared_error(test_data_y, predDataY))
+    mse_pre = (mean_squared_error(test_data_y, pred_data_y))
     # The mean squared error
     print("Feature " + str(i))
     print("Best Alpha %f, Best Gamma %.2E" % (alpha, Decimal(gamma)))
     print("Mean squared error: %.2f"
           % mse_pre)
     # Explained variance score: 1 is perfect prediction
-    print('Variance score: %.2f' % r2_score(test_data_y, predDataY))
+    print('Variance score: %.2f' % r2_score(test_data_y, pred_data_y))
     print("========================================================")
 
-    return mse_pre
+    return min(cost_history)
 
 
-def feature_combination(size, mse_pre, train_data_x, train_data_y, test_data_x, test_data_y, iterations=100, return_cost=False):
-
+def feature_combination(size, mse_pre, train_data_x, train_data_y, test_data_x, test_data_y, iterations=100,
+                        return_cost=False):
     aux = mse_pre.copy()
     features = []
     for j in range(size):
@@ -110,9 +109,9 @@ def feature_combination(size, mse_pre, train_data_x, train_data_y, test_data_x, 
 
     # add bias feature at the beginning
     train_data_x_selected_feat = np.insert(train_data_x[:, features], [0], np.ones((train_data_x.shape[0], 1)),
-                                       axis=1)
+                                           axis=1)
     test_data_x_selected_feat = np.insert(test_data_x[:, features], [0], np.ones((test_data_x.shape[0], 1)),
-                                      axis=1)
+                                          axis=1)
 
     alpha, gamma = cross_validation(train_data_x_selected_feat, train_data_y)
 
@@ -133,9 +132,10 @@ def feature_combination(size, mse_pre, train_data_x, train_data_y, test_data_x, 
     print('Variance score: %.2f' % r2_score(test_data_y, pred_data_y))
     print("========================================================")
     if return_cost:
-        return mse_pos, cost_history
+        return min(cost_history), cost_history
     else:
-        return mse_pos
+        return min(cost_history)
+
 
 # Load the shares dataset
 rawData = open("dataset/shares/train.csv")
@@ -161,28 +161,31 @@ testDataXScaled = scaler.transform(testDataX)
 num_cores = multiprocessing.cpu_count()
 
 try:
-    with open("mse.txt", 'r') as f:
-        mse_pre = [float(line) for line in f]
+    with open("cost.txt", 'r') as f:
+        cost_pre = [float(line) for line in f]
 except FileNotFoundError:
-    mse_pre = Parallel(n_jobs=num_cores)(
+    cost_pre = Parallel(n_jobs=num_cores)(
         delayed(feature_test)(i, trainDataXScaled, trainDataY, testDataXScaled, testDataY) for i in
         range(trainDataXScaled.shape[1]))
 
-    with open("mse.txt", 'w') as f:
-        for s in mse_pre:
+    with open("cost.txt", 'w') as f:
+        for s in cost_pre:
             f.write(str(s) + '\n')
-best_feature = mse_pre.index(min(mse_pre))
+best_feature = cost_pre.index(min(cost_pre))
 print("\nBest feature is %d" % best_feature)
 print("========================================================")
 
-mse_pos = [0, mse_pre[best_feature]]
-mse_pos = mse_pos + Parallel(n_jobs=num_cores)(delayed(feature_combination)(size, mse_pre, trainDataXScaled, trainDataY, testDataXScaled, testDataY, 50) for size in range(2, trainDataXScaled.shape[1]))
+cost_pos = [0, cost_pre[best_feature]]
+cost_pos = cost_pos + Parallel(n_jobs=num_cores)(
+    delayed(feature_combination)(size, cost_pre, trainDataXScaled, trainDataY, testDataXScaled, testDataY, 25) for size
+    in range(2, trainDataXScaled.shape[1]))
 
-best_n_features = mse_pos.index(min(mse_pos[1:]))
+best_n_features = cost_pos.index(min(cost_pos[1:]))
 print("\nBest selection is with %d features" % best_n_features)
 print("========================================================")
 
-mse_pos, cost_history = feature_combination(best_n_features, mse_pre, trainDataXScaled, trainDataY, testDataXScaled, testDataY, 100, True)
+cost_pos, cost_history = feature_combination(best_n_features, cost_pre, trainDataXScaled, trainDataY, testDataXScaled,
+                                             testDataY, 50, True)
 
 plt.plot(range(len(cost_history)), cost_history, 'ro')
 plt.show()
