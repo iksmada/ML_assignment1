@@ -1,4 +1,3 @@
-import operator
 from decimal import Decimal
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
@@ -24,7 +23,7 @@ def cost_function(X, y, beta):
     # Calculate the cost with the given parameters
     J = (np.sum((predict(X, beta) - y) ** 2) + beta[:, 0].dot(beta)) / 2 / m
 
-    return J
+    return float(J)
 
 
 def gradient_descent(X, y, iterations=100, alpha=0.1, gamma=0.1, beta=None):
@@ -52,6 +51,12 @@ def gradient_descent(X, y, iterations=100, alpha=0.1, gamma=0.1, beta=None):
 
     return beta, cost_history
 
+def normal_equation(X, y):
+
+    x_transpose = X.T
+    beta = np.linalg.pinv(x_transpose.dot(X)).dot(x_transpose).dot(y)
+    return beta
+
 
 def cross_validation(X, y, iterations=50, alphas=(0.001, 0.01, 0.1, 1, 10), gammas=None, beta=None):
     if gammas is None:
@@ -62,7 +67,7 @@ def cross_validation(X, y, iterations=50, alphas=(0.001, 0.01, 0.1, 1, 10), gamm
     best_alpha = 0
     for alpha in alphas:
         for gamma in gammas:
-            beta, cost_history = gradient_descent(X, y, iterations, alpha, gamma)
+            beta = normal_equation(X, y)
             cost = float(min(cost_history))
             if best_cost == -1 or cost < best_cost:
                 best_alpha = alpha
@@ -76,11 +81,9 @@ def feature_test(i, train_data_x, train_data_y, test_data_x, test_data_y):
     feature = np.insert(train_data_x[:, i][:, None], [0], np.ones((train_data_x.shape[0], 1)), axis=1)
     test_data_x_one_feat = np.insert(test_data_x[:, i][:, None], [0], np.ones((test_data_x.shape[0], 1)), axis=1)
 
-    alpha, gamma = cross_validation(feature, train_data_y)
-
     # Train the model using the training sets
-    beta, cost_history = gradient_descent(feature, train_data_y, 100, alpha, gamma)
-    cost_min = float(min(cost_history))
+    beta = normal_equation(feature, train_data_y)
+    cost = cost_function(feature, train_data_y, beta)
     # Make predictions using the testing set
     pred_data_y = predict(test_data_x_one_feat, beta)
 
@@ -89,13 +92,12 @@ def feature_test(i, train_data_x, train_data_y, test_data_x, test_data_y):
     # The mean squared error
     print("Feature " + str(i))
 
-    show_stats(alpha, cost_min, gamma, pred_data_y, test_data_y)
+    show_stats(cost, pred_data_y, test_data_y)
 
-    return cost_min
+    return cost
 
 
-def feature_combination(size, mse_pre, train_data_x, train_data_y, test_data_x, test_data_y, iterations=100,
-                        return_cost=False):
+def feature_combination(size, mse_pre, train_data_x, train_data_y, test_data_x, test_data_y):
     aux = list(mse_pre)
     features = []
     for j in range(size):
@@ -109,27 +111,22 @@ def feature_combination(size, mse_pre, train_data_x, train_data_y, test_data_x, 
     test_data_x_selected_feat = np.insert(test_data_x[:, features], [0], np.ones((test_data_x.shape[0], 1)),
                                           axis=1)
 
-    alpha, gamma = cross_validation(train_data_x_selected_feat, train_data_y)
-
     # Train the model using the training sets
-    beta, cost_history = gradient_descent(train_data_x_selected_feat, train_data_y, iterations, alpha, gamma)
-    cost_min = float(min(cost_history))
+    beta = normal_equation(train_data_x_selected_feat, train_data_y)
+    cost = cost_function(train_data_x_selected_feat, train_data_y, beta)
     # Make predictions using the testing set
     pred_data_y = predict(test_data_x_selected_feat, beta)
 
-    print("Using features: " + str(features))
-    mae_pos = show_stats(alpha, cost_min, gamma, pred_data_y, test_data_y)
-    if return_cost:
-        return mae_pos, cost_history
-    else:
-        return mae_pos
+    print("Using features:" +str(features))
+    mae_pos = show_stats(cost, pred_data_y, test_data_y)
+
+    return mae_pos
 
 
-def show_stats(alpha, cost_min, gamma, pred_data_y, test_data_y):
+def show_stats(cost_min, pred_data_y, test_data_y):
     # The coefficients
     mse_pos = (mean_squared_error(test_data_y, pred_data_y))
     mae_pos = (mean_absolute_error(test_data_y, pred_data_y))
-    print("Best Alpha %f, Best Gamma %.2E" % (alpha, Decimal(gamma)))
     # The mean squared error
     print("Best Cost J(theta): %f" % cost_min)
     print("Mean Absolute error: %.2f" % mae_pos)
@@ -203,15 +200,14 @@ print("========================================================")
 
 mae_pos = [0]
 mae_pos = mae_pos + Parallel(n_jobs=num_cores)(
-    delayed(feature_combination)(size, cost_pre, trainDataX, trainDataY, testDataX, testDataY, 25) for size
+    delayed(feature_combination)(size, cost_pre, trainDataX, trainDataY, testDataX, testDataY) for size
     in range(1, trainDataX.shape[1]))
 
 best_n_features = mae_pos.index(min(mae_pos[1:]))
 print("\nBest selection is with %d features" % best_n_features)
 print("========================================================")
 
-cost_final, cost_history = feature_combination(best_n_features, cost_pre, trainDataX, trainDataY, testDataX,
-                                             testDataY, 50, True)
+cost_final = feature_combination(best_n_features, cost_pre, trainDataX, trainDataY, testDataX, testDataY)
 mae_pos[0] = cost_final
 
 plt.plot(range(len(mae_pos)), mae_pos, 'ro')
