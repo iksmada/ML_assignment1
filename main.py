@@ -96,12 +96,12 @@ def feature_test(i, train_data_x, train_data_y, test_data_x, test_data_y):
 
 def feature_combination(size, mse_pre, train_data_x, train_data_y, test_data_x, test_data_y, iterations=100,
                         return_cost=False):
-    aux = mse_pre.copy()
+    aux = list(mse_pre)
     features = []
     for j in range(size):
         local_min = aux.index(min(aux))
-        features.append(local_min)
-        del aux[local_min]
+        features.append(local_min + j)
+        aux.remove(min(aux))
 
     # add bias feature at the beginning
     train_data_x_selected_feat = np.insert(train_data_x[:, features], [0], np.ones((train_data_x.shape[0], 1)),
@@ -117,12 +117,12 @@ def feature_combination(size, mse_pre, train_data_x, train_data_y, test_data_x, 
     # Make predictions using the testing set
     pred_data_y = predict(test_data_x_selected_feat, beta)
 
-    print("Using %d features" % size)
-    show_stats(alpha, cost_min, gamma, pred_data_y, test_data_y)
+    print("Using features: " + str(features))
+    mae_pos = show_stats(alpha, cost_min, gamma, pred_data_y, test_data_y)
     if return_cost:
-        return cost_min, cost_history
+        return mae_pos, cost_history
     else:
-        return cost_min
+        return mae_pos
 
 
 def show_stats(alpha, cost_min, gamma, pred_data_y, test_data_y):
@@ -138,6 +138,7 @@ def show_stats(alpha, cost_min, gamma, pred_data_y, test_data_y):
     # Explained variance score: 1 is perfect prediction
     print('Variance score: %.2f' % r2_score(test_data_y, pred_data_y))
     print("========================================================")
+    return mae_pos
 
 
 def remove_noise(train_data_x, train_data_y):
@@ -200,17 +201,18 @@ best_feature = cost_pre.index(min(cost_pre))
 print("\nBest feature is %d" % best_feature)
 print("========================================================")
 
-cost_pos = [0, cost_pre[best_feature]]
-cost_pos = cost_pos + Parallel(n_jobs=num_cores)(
+mae_pos = [0]
+mae_pos = mae_pos + Parallel(n_jobs=num_cores)(
     delayed(feature_combination)(size, cost_pre, trainDataX, trainDataY, testDataX, testDataY, 25) for size
-    in range(2, trainDataX.shape[1]))
+    in range(1, trainDataX.shape[1]))
 
-best_n_features = cost_pos.index(min(cost_pos[1:]))
+best_n_features = mae_pos.index(min(mae_pos[1:]))
 print("\nBest selection is with %d features" % best_n_features)
 print("========================================================")
 
-cost_pos, cost_history = feature_combination(best_n_features, cost_pre, trainDataX, trainDataY, testDataX,
+cost_final, cost_history = feature_combination(best_n_features, cost_pre, trainDataX, trainDataY, testDataX,
                                              testDataY, 50, True)
+mae_pos[0] = cost_final
 
-plt.plot(range(len(cost_history)), cost_history, 'ro')
+plt.plot(range(len(mae_pos)), mae_pos, 'ro')
 plt.show()
